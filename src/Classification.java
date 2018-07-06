@@ -260,6 +260,7 @@ public class Classification {
 		return pos;
 	}
 	
+	//*出现次数
 	private double calProbabilityByClass(List<Double> vec,List<Integer> emailVec) {
 		double sum = 0.0;
 		for (int i = 0; i < vec.size(); i++) {
