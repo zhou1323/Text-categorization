@@ -2,21 +2,29 @@ import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 
+import javax.lang.model.element.VariableElement;
+
 import com.huaban.analysis.jieba.JiebaSegmenter;
 import com.huaban.analysis.jieba.JiebaSegmenter.SegMode;
+
+import dao.CateDAO;
+import dao.TextDAO;
 public class Classification {
-	private List<Double> p0Vec = null;
-	//垃圾邮件中每个词出现的概率
-	private List<Double> p1Vec = null;
-	//垃圾邮件出现的概率
-	private double pSpamRatio;
+	//各类新闻中每个词出现的概率
+	private List<List<Double>> pVecs = new ArrayList<List<Double>>();
+	//各类新闻出现的概率
+	private double[] ratios=new double[utils.Properties.newsType.length];
+	
 
 	public List<Artical> initTestSet(){
 		List<Artical> testSet=new ArrayList<Artical>();
@@ -53,52 +61,21 @@ public class Classification {
 	 */
 	public List<Artical> initDataSet() {
 		List<Artical> dataSet = new ArrayList<Artical>();
-		BufferedReader bufferedReader1 = null;
-		BufferedReader bufferedReader2 = null;
+		TextDAO textDAO=new TextDAO();
 		try {
-			for (int i = 10; i < 100; i++) {
-				bufferedReader1 = new BufferedReader(new InputStreamReader(
-						new FileInputStream(
-								"E:\\Test\\Test\\social\\"
-										+ i + ".txt")));
-				StringBuilder sb1 = new StringBuilder();
-				String string = null;
-				while ((string = bufferedReader1.readLine()) != null) {
-					sb1.append(string);
+			for(int i=0;i<utils.Properties.newsType.length;i++) {
+				List<String> news=textDAO.getTextByType(utils.Properties.newsType[i]);
+				for (String string : news) {
+					Artical artical=new Artical();
+					artical.setWordList(textParse(string));
+					artical.setType(utils.Properties.newsType[i]);
+					dataSet.add(artical);
 				}
-				Artical hamArtical = new Artical();
-				hamArtical.setWordList(textParse(sb1.toString()));
-				//社会类新闻
-				hamArtical.setFlag(0);
-
-				bufferedReader2 = new BufferedReader(new InputStreamReader(
-						new FileInputStream(
-								"E:\\Test\\Test\\sports\\"
-										+ i + ".txt")));
-				StringBuilder sb2 = new StringBuilder();
-				while ((string = bufferedReader2.readLine()) != null) {
-					sb2.append(string);
-				}
-				Artical spamArtical = new Artical();
-				spamArtical.setWordList(textParse(sb2.toString()));
-				//科技类新闻
-				spamArtical.setFlag(1);
-
-				dataSet.add(hamArtical);
-				dataSet.add(spamArtical);
 			}
 			return dataSet;
 		} catch (Exception e) {
 			e.printStackTrace();
 			throw new RuntimeException();
-		} finally {
-			try {
-				bufferedReader1.close();
-				bufferedReader2.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-
 		}
 	}
 
@@ -166,28 +143,28 @@ public class Classification {
 	public void trainNB(Set<String> vocabSet, List<Artical> dataSet) {
 		// 训练文本的数量
 		int numTrainDocs = dataSet.size();
-		// 训练集中垃圾邮件的概率
-		pSpamRatio = (double) calSpamNum(dataSet) / numTrainDocs;
+		// 训练集中各类型新闻的概率
+		int[] newsNum=calSpamNum(dataSet);
+		for(int i=0;i<newsNum.length;i++) {
+			ratios[i]=(double) newsNum[i]/numTrainDocs;
+		}
 
 		// 记录每个类别下每个词的出现次数
-		List<Integer> p0Num = new ArrayList<Integer>();
-		List<Integer> p1Num = new ArrayList<Integer>();
+		List<List<Integer>> pNums=new ArrayList<List<Integer>>(Arrays.asList(null,null,null,null,null,null,null,null,null,null));
 		// 记录每个类别下一共出现了多少词,为防止分母为0，所以在此默认值为2
-		double p0Denom = 2.0, p1Denom = 2.0;
+		double[] pDenoms= new double[10];
 		for (Artical email : dataSet) {
 			List<Integer> list = setOfWords2Vec(vocabSet, email);
-			// 如果是垃圾邮件
-			if (email.getFlag() == 1) {
-				p1Num = vecAddVec(p1Num, list);
-				//计算该类别下出现的所有单词数目
-				p1Denom += calTotalWordNum(list);
-			}else {
-				p0Num = vecAddVec(p0Num, list);
-				p0Denom += calTotalWordNum(list);
-			}
+			
+			int postion=Arrays.binarySearch(utils.Properties.newsType,email.getType());
+			pNums.set(postion, vecAddVec(pNums.get(postion), list));
+			pDenoms[postion] += calTotalWordNum(list);
+			
 		}
-		p0Vec = calWordRatio(p0Num, p0Denom);
-		p1Vec = calWordRatio(p1Num, p1Denom);
+		for(int i=0;i<pNums.size();i++) {
+			List<Double> temp=calWordRatio(pNums.get(i), pDenoms[i]);
+			pVecs.add(temp);
+		}
 	}
 
 	/**
@@ -199,7 +176,7 @@ public class Classification {
 	 */
 	private List<Integer> vecAddVec(List<Integer> vec1,
 			List<Integer> vec2) {
-		if (vec1.size() == 0) {
+		if (vec1 == null) {
 			return vec2;
 		}
 		List<Integer> list = new ArrayList<Integer>();
@@ -210,17 +187,21 @@ public class Classification {
 	}
 	
 	/**
-	 * 计算垃圾邮件的数量
+	 * 计算各类型新闻的数量
 	 * 
 	 * @param dataSet
 	 * @return
 	 */
-	private int calSpamNum(List<Artical> dataSet) {
-		int time = 0;
+	private int[] calSpamNum(List<Artical> dataSet) {
+		int[] results= {0,0,0,0,0,0,0,0,0,0};
+		
 		for (Artical email : dataSet) {
-			time += email.getFlag();
+			
+			int position=Arrays.binarySearch(utils.Properties.newsType, email.getType());
+			
+			results[position]+=1;
 		}
-		return time;
+		return results;
 	}
 	
 	/**
@@ -260,13 +241,23 @@ public class Classification {
 	 * @return 返回概率最大值 
 	 */
 	public int classifyNB(List<Integer> emailVec) {
-		double p0 = calProbabilityByClass(p0Vec, emailVec) + Math.log(1 - pSpamRatio);
-		double p1 = calProbabilityByClass(p1Vec, emailVec) + Math.log(pSpamRatio);
-		if (p0 > p1) {
-			return 0;
-		}else {
-			return 1;
+		double[] possibilities=new double[pVecs.size()];
+		for(int i=0;i<pVecs.size();i++) {
+			possibilities[i] = calProbabilityByClass(pVecs.get(i), emailVec) + Math.log(ratios[i]);
 		}
+		Arrays.sort(possibilities);
+		int pos=Arrays.binarySearch(possibilities, Arrays.stream(possibilities).max().getAsDouble());
+//		for(int i=0;i<possibilities.length;i++) {
+//			for(int j=0;j<possibilities.length-i-1;j++) {
+//				if(possibilities[j]<possibilities[j+1]) {
+//					double temp=possibilities[j];
+//					possibilities[j]=possibilities[j+1];
+//					possibilities[j+1]=temp;
+//				}
+//			}
+//		}
+		
+		return pos;
 	}
 	
 	private double calProbabilityByClass(List<Double> vec,List<Integer> emailVec) {
@@ -279,7 +270,7 @@ public class Classification {
 	
 	public void testingNB() {
 		List<Artical> dataSet = initDataSet();
-		List<Artical> testSet=initTestSet();
+		List<Artical> testSet = initTestSet();
 //		List<Artical> testSet = new ArrayList<Artical>();
 		//随机取前10作为测试样本
 //		for (int i = 0; i < 10; i++) {
@@ -295,20 +286,21 @@ public class Classification {
 		
 		int errorCount = 0;
 		for (Artical email : testSet) {
-//			if (classifyNB(setOfWords2Vec(vocabSet, email)) != email.getFlag()) {
+//			if (classifyNB(setOfWords2Vec(vocabSet, email)) != email.getType()) {
 //				++errorCount;
 //			}
-			if(classifyNB(setOfWords2Vec(vocabSet, email))==0) {
-				System.out.println("It's a social artical");
-			}
-			else
-				System.out.println("Sports!");
+			int temp=classifyNB(setOfWords2Vec(vocabSet, email));
+			System.out.println(utils.Properties.newsType[1]);
+			
 		}
 //		System.out.println("the error rate is: " + (double) errorCount / testSet.size());
 //		return (double) errorCount / testSet.size();
 	}
 
 	public static void main(String[] args) {
+		//调用binarySearch()方法前要先调用sort方法对数组进行排序，否则得出的返回值不定，这时二分搜索算法决定的。
+		Arrays.sort(utils.Properties.newsType);
+		
 		Classification bayesian = new Classification();
 		bayesian.testingNB();
 //		double d = 0;
