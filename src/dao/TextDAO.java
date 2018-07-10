@@ -36,4 +36,21 @@ public class TextDAO {
     	conn.close();
     	return result;
     }
+    
+    public double getTextPossibilityByType(String type) throws NumberFormatException, SQLException, ClassNotFoundException {
+    	double result=0;
+    	String sql = "SELECT COUNT(type)/(SELECT COUNT(*) from text) as possibility "
+    			+ "FROM text WHERE type=?";
+    	Connection conn = getConn();
+    	PreparedStatement ps = conn.prepareStatement(sql);
+    	ps.setString(1, type);
+    	ResultSet rs = ps.executeQuery();
+    	while(rs.next()) {
+    		result=Double.valueOf(rs.getString("possibility"));
+    	}
+    	rs.close();
+    	ps.close();
+    	conn.close();
+    	return result;
+    }
 }
