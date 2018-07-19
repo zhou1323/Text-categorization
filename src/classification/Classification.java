@@ -194,7 +194,6 @@ public class Classification {
 			}
 			
 			termPos.put("TheGhostWord",(double)1/denom);
-			System.out.println("Ghost word is:"+(double)1/denom);
 			pVecs.add(termPos);
 		}
 	}
@@ -231,13 +230,11 @@ public class Classification {
 	// *出现次数
 	private double calProbabilityByClass(HashMap<String, Double> vec, HashMap<String, Integer> artical) {
 		double sum = 0.0;
-		for (String term : artical.keySet()) {
-			if (vec.containsKey(term)) {
-				//System.out.println(term+"'s possibility "+vec.get(term)+" and the num is "+artical.get(term));
+		
+		//以训练集为标准
+		for(String term:vec.keySet()) {
+			if(artical.containsKey(term)) {
 				sum += vec.get(term) * artical.get(term);
-			}
-			else {
-				sum += vec.get("TheGhostWord") * artical.get(term);
 			}
 		}
 		return sum;

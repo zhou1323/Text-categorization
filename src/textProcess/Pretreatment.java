@@ -29,7 +29,7 @@ import dao.TextDAO;
 
 public class Pretreatment {
 	/**
-	 * 分词，英文的分词相比中文的分词要简单很多，这里使用的分隔符为除单词、数字外的任意字符串 如果使用中文，则可以使用中科院的一套分词系统，分词效果还算不错
+	 * 分词
 	 * 
 	 * @param originalString
 	 * @return
