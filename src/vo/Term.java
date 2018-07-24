@@ -1,4 +1,4 @@
-package classification;
+package vo;
 import java.util.List;
 
 import javax.management.loading.PrivateClassLoader;

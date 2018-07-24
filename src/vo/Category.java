@@ -1,4 +1,4 @@
-package classification;
+package vo;
 
 import java.util.HashMap;
 
