@@ -29,8 +29,10 @@ import com.huaban.analysis.jieba.JiebaSegmenter.SegMode;
 
 import dao.CateDAO;
 import dao.TextDAO;
+import spider.Spider;
 import textProcess.Pretreatment;
 import vo.Category;
+import vo.News;
 
 public class Classification {
 	// 各类新闻中每个词出现的概率
@@ -38,40 +40,40 @@ public class Classification {
 	// 各类新闻出现的概率
 	private double[] ratios = new double[utils.Properties.newsType.length];
 
-	//初始化测试集
-	public HashMap<String, Integer> initTestSet(String file) {
+	// 初始化测试集
+	public HashMap<String, Integer> initTestSet(String file, boolean isFile) {
 		HashMap<String, Integer> result = new HashMap<String, Integer>();
 		Pretreatment pt = new Pretreatment();
-		BufferedReader br = null;
+		
 		try {
-			br = new BufferedReader(new InputStreamReader(new FileInputStream(file),Charset.forName("GBK")));
-			StringBuilder sb1 = new StringBuilder();
-			String string = null;
-			while ((string = br.readLine()) != null) {
-				sb1.append(string);
-			}
-			HashMap<String, Integer> temp = pt.textParse(sb1.toString());
+			HashMap<String, Integer> temp = new HashMap<String, Integer>();
+			if (isFile) {
+				BufferedReader br = null;
+				br = new BufferedReader(new InputStreamReader(new FileInputStream(file), Charset.forName("GBK")));
+				StringBuilder sb1 = new StringBuilder();
+				String string = null;
+				while ((string = br.readLine()) != null) {
+					sb1.append(string);
+				}
+				temp = pt.textParse(sb1.toString());
+				
+				br.close();
+			} else
+				temp = pt.textParse(file);
+			
 			// 筛选tdidf较大的词
 			List<String> words = pickWordsByTdidf(temp);
 			for (String word : words) {
 				result.put(word, temp.get(word));
 			}
-			return temp;
-			//return result;
+			return result;
 		} catch (Exception e) {
 			e.printStackTrace();
 			throw new RuntimeException();
-		} finally {
-			try {
-				br.close();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-
 		}
 	}
 
-	//选出tdidf较大的词
+	// 选出tdidf较大的词
 	public List<String> pickWordsByTdidf(HashMap<String, Integer> terms) {
 		List<String> result = new ArrayList<String>();
 		Pretreatment pt = new Pretreatment();
@@ -106,13 +108,13 @@ public class Classification {
 
 		for (int i = 0; i < (list.size() > 10 ? 10 : list.size()); i++) {
 			HashMap.Entry<String, Double> mapping = list.get(i);
-			//System.out.println(mapping.getKey());
+			// System.out.println(mapping.getKey());
 			result.add(mapping.getKey());
 		}
 		return result;
 	}
 
-	//初始化数据集
+	// 初始化数据集
 	public List<Category> initDataSet() {
 		List<Category> categories = new ArrayList<Category>();
 		Pretreatment pt = new Pretreatment();
@@ -121,7 +123,7 @@ public class Classification {
 			int total = 0;
 			for (int i = 0; i < utils.Properties.newsType.length; i++) {
 				String type = utils.Properties.newsType[i];
-				//读取训练集结果
+				// 读取训练集结果
 				String jsonString = pt.getDatafromFile(type);
 				JSONArray news = new JSONObject(jsonString).getJSONArray(type);
 				total += news.length();
@@ -141,10 +143,10 @@ public class Classification {
 				// 遍历文章
 				for (int j = 0; j < news.length(); j++) {
 					JSONObject artical = news.getJSONObject(j);
-					
-					int totalTerm=artical.getInt("total");
-					termNum+=totalTerm;
-					
+
+					int totalTerm = artical.getInt("total");
+					termNum += totalTerm;
+
 					// 遍历词
 					JSONArray termsArray = artical.getJSONArray("terms");
 					for (int k = 0; k < termsArray.length(); k++) {
@@ -172,7 +174,7 @@ public class Classification {
 		}
 	}
 
-	//训练数据集,计算各类新闻中每个词出现的概率
+	// 训练数据集,计算各类新闻中每个词出现的概率
 	public void trainNB(List<Category> categories) {
 		Pretreatment pt = new Pretreatment();
 
@@ -183,15 +185,15 @@ public class Classification {
 			HashMap<String, Double> termPos = new HashMap<String, Double>();
 			Category category = categories.get(i);
 			ratios[i] = category.getPossibility();
-			double denom = category.getTermNum()+category.getTerms().size()/10;
+			double denom = category.getTermNum() + category.getTerms().size() / 10;
 
 			HashMap<String, Integer> terms = category.getTerms();
 			for (String termName : terms.keySet()) {
-				double possibility = Math.log((double) (terms.get(termName)+0.1) / denom);
+				double possibility = Math.log((double) (terms.get(termName) + 0.1) / denom);
 				termPos.put(termName, possibility);
 			}
-			
-			termPos.put("TheGhostWord",Math.log((double)0.1/denom));
+
+			termPos.put("TheGhostWord", Math.log((double) 0.1 / denom));
 			pVecs.add(termPos);
 		}
 	}
@@ -226,43 +228,40 @@ public class Classification {
 	// 取对数后需要乘出现次数
 	private double calProbabilityByClass(HashMap<String, Double> vec, HashMap<String, Integer> article) {
 		double sum = 0.0;
-		
-		//测试集为标准
-		for(String term:article.keySet()) {
-			if(vec.containsKey(term)) {
+
+		// 测试集为标准
+		for (String term : article.keySet()) {
+			if (vec.containsKey(term)) {
 				sum += vec.get(term) * article.get(term);
-				//System.out.println("The num of word "+term+" in article is: "+article.get(term));
-				//System.out.println("And the possibility is: "+vec.get(term));
-			}
-			else {
-				sum+=vec.get("TheGhostWord")*article.get(term);
-				//System.out.println("The num of word "+term+" in article is: "+article.get(term));
-				//System.out.println("And the possibility of GW is: "+vec.get("TheGhostWord"));
+			} else {
+				sum += vec.get("TheGhostWord") * article.get(term);
+
 			}
 		}
 		return sum;
 	}
 
-	// 测试
-	public void testingNB() {
+	//训练
+	public void train() {
 		List<Category> dataSet = initDataSet();
-		// 训练样本
 		trainNB(dataSet);
-				
-		int correctNum=0;
-		for(int i=10;i<=17;i++) {
-			//测试集向量化
-			HashMap<String, Integer> testSet = initTestSet(utils.Properties.testSetPos+String.valueOf(i)+".txt");
-			int type = classifyNB(testSet);
-//			if(utils.Properties.newsType[type].equals("科技")) {
-//				correctNum+=1;
-//			}
-			System.out.println(i+" is "+utils.Properties.newsType[type]);
-		}
+	}
+	// 测试
+	public String testingNB(String file,boolean isFile) {
+		HashMap<String, Integer> testSet = initTestSet(file,isFile);
+		int type=classifyNB(testSet);
+		String realType =utils.Properties.newsType[type];
+		return realType;
+		// 测试集向量化
+		//HashMap<String, Integer> testSet = initTestSet(
+		//		utils.Properties.testSetPos + String.valueOf(i) + ".txt",0);
+		//int type = classifyNB(testSet);
+		//System.out.println(i + " is " + utils.Properties.newsType[type]);
 	}
 
-	public static void main(String[] args) {
-		Classification bayesian = new Classification();
-		bayesian.testingNB();
-	}
+
+//	public static void main(String[] args) {
+//		Classification bayesian = new Classification();
+//		bayesian.testingNB();
+//	}
 }

@@ -8,8 +8,10 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import vo.News;
+
 public class CateDAO {
-	public static final String URL = "jdbc:mysql://138.68.62.57:3306/category?serverTimezone=GMT&useSSL=false&useUnicode=true&characterEncoding=UTF8";
+	public static final String URL = "jdbc:mysql://138.68.62.57:3306/webtext?serverTimezone=GMT&useSSL=false&useUnicode=true&characterEncoding=UTF8";
 	public static final String DRIVER = "com.mysql.cj.jdbc.Driver";
 	public static final String UNAME = "root";
 	public static final String PASSWORD = "MyNewPass4!";
@@ -46,12 +48,17 @@ public class CateDAO {
     	return result;
     }
     
-    public void addCategory(String content,String type) throws ClassNotFoundException, SQLException{
-    	String sql = "insert into News (content,type) values (?,?)";
+    public void addCategory(News news) throws ClassNotFoundException, SQLException{
+    	String sql = "insert into news (type,title,url,content,date,source) values (?,?,?,?,?,?)";
     	Connection conn = getConn();
     	PreparedStatement ps = conn.prepareStatement(sql);
-    	ps.setString(1, content);
-    	ps.setString(2, type);
+    	ps.setString(1, news.getType());
+    	ps.setString(2, news.getTitle());
+    	ps.setString(3, news.getUrl());
+    	ps.setString(4, news.getContent());
+    	ps.setString(5, news.getDate());
+    	ps.setString(6, news.getSource());
+    	
     	ps.execute();
     	ps.close();
     	conn.close();
